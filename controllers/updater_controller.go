@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -27,8 +28,10 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"gopkg.in/src-d/go-git.v4"
+	github "github.com/google/go-github/v29/github"
+	git "gopkg.in/src-d/go-git.v4"
 	"gopkg.in/src-d/go-git.v4/plumbing"
+	"gopkg.in/src-d/go-git.v4/plumbing/object"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -65,8 +68,9 @@ func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	setDefaultValuesIfNotPresent(updater)
 
-	// TODO: Add supports of public cloud registry services.
-	tags, err := fetchLatestTagFromDockerHub(updater.Spec.Registry.DockerHub)
+	// TODO: Add supports for public cloud registry services.
+	var registry = updater.Spec.Registry.DockerHub
+	tags, err := fetchTagsFromDockerHub(registry)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -86,34 +90,82 @@ func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// TODO: Add the function that checks wheather the registry tag
-	//       has been updated, using in-memory database like Redis.
+	//       had been updated, using in-memory database like Redis.
 
-	opts := &git.CloneOptions{
+	repo, err := git.PlainCloneContext(context.TODO(), clonePath, false, &git.CloneOptions{
 		URL:           updater.Spec.Repository.Git,
 		SingleBranch:  true,
 		ReferenceName: plumbing.NewBranchReferenceName(updater.Spec.Repository.Branch),
+	})
+	if err != nil {
+		return ctrl.Result{}, err
 	}
-	if _, err := git.PlainCloneContext(context.TODO(), clonePath, false, opts); err != nil {
+	worktree, err := repo.Worktree()
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	var paths = []string{}
-	if err = filepath.Walk(updater.Spec.Repository.Path, func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			paths = append(paths, path)
-		}
-		return nil
+	branch := fmt.Sprintf("feature/update-tag-%s:%s", registry, tag)
+	if err := worktree.Checkout(&git.CheckoutOptions{
+		Create: true,
+		Branch: plumbing.NewBranchReferenceName(branch),
 	}); err != nil {
 		return ctrl.Result{}, err
 	}
 
+	var paths = []string{}
+	if err = filepath.Walk(
+		updater.Spec.Repository.Path,
+		func(path string, info os.FileInfo, err error) error {
+			if !info.IsDir() {
+				paths = append(paths, path)
+			}
+			return nil
+		}); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	re := regexp.MustCompile(regexp.QuoteMeta(fmt.Sprintf(`%s:[^ ]+`, registry)))
 	for _, p := range paths {
 		content, err := ioutil.ReadFile(p)
 		if err != nil {
+			return ctrl.Result{}, err
+		}
+		replacedContent := re.ReplaceAll(content, []byte(tag))
+		if err := ioutil.WriteFile(p, replacedContent, 0); err != nil {
+			return ctrl.Result{}, err
+		}
+		if _, err := worktree.Add(p); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 
-	// client := github.NewClient(nil)
+	msg := ":up: Update image tag names from manifests"
+	if _, err := worktree.Commit(msg, &git.CommitOptions{
+		All: true,
+		Committer: &object.Signature{
+			Name: "manifest-updater",
+		},
+	}); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := repo.PushContext(context.TODO(), &git.PushOptions{}); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	client := github.NewClient(nil)
+	if _, _, err := client.PullRequests.Create(
+		context.TODO(), "manifest-updater", "", &github.NewPullRequest{
+			Title:               github.String("Automaticaly update image tags"),
+			Head:                github.String(branch),
+			Base:                github.String(updater.Spec.Repository.Branch),
+			Body:                github.String(""),
+			MaintainerCanModify: github.Bool(true),
+		},
+	); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -127,7 +179,7 @@ func setDefaultValuesIfNotPresent(updater *manifestupdaterkoyutaiov1alpha1.Updat
 	}
 }
 
-func fetchLatestTagFromDockerHub(repository string) ([]string, error) {
+func fetchTagsFromDockerHub(repository string) ([]string, error) {
 	registry, err := name.NewRepository(repository)
 	if err != nil {
 		return []string{}, err
