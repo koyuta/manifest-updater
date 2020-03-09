@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -32,6 +33,7 @@ import (
 	git "gopkg.in/src-d/go-git.v4"
 	"gopkg.in/src-d/go-git.v4/plumbing"
 	"gopkg.in/src-d/go-git.v4/plumbing/object"
+	"gopkg.in/src-d/go-git.v4/plumbing/transport"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -92,7 +94,14 @@ func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// TODO: Add the function that checks wheather the registry tag
 	//       had been updated, using in-memory database like Redis.
 
-	repo, err := git.PlainCloneContext(context.TODO(), clonePath, false, &git.CloneOptions{
+	endpoint, err := transport.NewEndpoint(updater.Spec.Repository.Git)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	path := strings.Split(endpoint.Path, "/")
+	owner, reponame := path[0], path[1]
+
+	repository, err := git.PlainCloneContext(context.TODO(), clonePath, false, &git.CloneOptions{
 		URL:           updater.Spec.Repository.Git,
 		SingleBranch:  true,
 		ReferenceName: plumbing.NewBranchReferenceName(updater.Spec.Repository.Branch),
@@ -100,7 +109,7 @@ func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	worktree, err := repo.Worktree()
+	worktree, err := repository.Worktree()
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -150,13 +159,13 @@ func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	if err := repo.PushContext(context.TODO(), &git.PushOptions{}); err != nil {
+	if err := repository.PushContext(context.TODO(), &git.PushOptions{}); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	client := github.NewClient(nil)
 	if _, _, err := client.PullRequests.Create(
-		context.TODO(), "manifest-updater", "", &github.NewPullRequest{
+		context.TODO(), owner, reponame, &github.NewPullRequest{
 			Title:               github.String("Automaticaly update image tags"),
 			Head:                github.String(branch),
 			Base:                github.String(updater.Spec.Repository.Branch),
