@@ -47,6 +47,10 @@ const (
 	defaultBranch = "master"
 )
 
+const (
+	imageTagRegexp = `( *)(?P<tag>\w[\w-\.]{0,127})`
+)
+
 // UpdaterReconciler reconciles a Updater object
 type UpdaterReconciler struct {
 	client.Client
@@ -134,7 +138,7 @@ func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	re := regexp.MustCompile(regexp.QuoteMeta(fmt.Sprintf(`%s:[^ ]+`, registry)))
+	re := regexp.MustCompile(fmt.Sprintf(`%s:%s`, regexp.QuoteMeta(registry), imageTagRegexp))
 	for _, p := range paths {
 		content, err := ioutil.ReadFile(p)
 		if err != nil {
