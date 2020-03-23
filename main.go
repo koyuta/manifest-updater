@@ -17,9 +17,12 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
+	"time"
 
+	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -28,6 +31,7 @@ import (
 
 	manifestupdaterkoyutaiov1alpha1 "manifest-updater/api/v1alpha1"
 	"manifest-updater/controllers"
+	"manifest-updater/updater"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -44,12 +48,18 @@ func init() {
 }
 
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
+	var (
+		metricsAddr          string
+		enableLeaderElection bool
+		interval             uint
+		token                string
+	)
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.UintVar(&interval, "interval", 60, "")
+	flag.StringVar(&token, "token", "", "")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
@@ -66,19 +76,36 @@ func main() {
 		os.Exit(1)
 	}
 
+	queue := make(chan *updater.Entry, 1)
+
 	if err = (&controllers.UpdaterReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("Updater"),
 		Scheme: mgr.GetScheme(),
+		Queue:  queue,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Updater")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 
+	looper := updater.NewUpdateLooper(
+		queue,
+		time.Duration(interval)*time.Second,
+		ctrl.Log.WithName("Loop"),
+		token,
+	)
+
+	var eg, _ = errgroup.WithContext(context.Background())
+	setupLog.Info("starting looper")
+	eg.Go(func() error {
+		return looper.Loop(ctrl.SetupSignalHandler())
+	})
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	eg.Go(func() error {
+		return mgr.Start(ctrl.SetupSignalHandler())
+	})
+	if err := eg.Wait(); err != nil {
 		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
 	}
 }
