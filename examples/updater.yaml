@@ -1,0 +1,12 @@
+apiVersion: manifest-updater.koyuta.io/v1alpha1
+kind: Updater
+metadata:
+  name: example-updater
+spec:
+  registry:
+    dockerHub: index.docker.io/example/app
+    filter: dev-*
+  repository:
+    git: git@github.com:koyuta/manifests
+    branch: master
+    path: /overlay/prd
