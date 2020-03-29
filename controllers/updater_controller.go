@@ -50,7 +50,7 @@ type UpdaterReconciler struct {
 
 func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	_ := r.Log.WithValues("updater", req.NamespacedName)
+	_ = r.Log.WithValues("updater", req.NamespacedName)
 
 	u := &manifestupdaterkoyutaiov1alpha1.Updater{}
 	if err := r.Get(ctx, req.NamespacedName, u); err != nil {

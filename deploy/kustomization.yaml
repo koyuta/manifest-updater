@@ -1,0 +1,13 @@
+namespace: manifest-updater-system
+
+resources:
+  - cluster_role.yaml
+  - cluster_role_binding.yaml
+  - crd.yaml
+  - deployment.yaml
+  - namespace.yaml
+  - role.yaml
+  - role_binding.yaml
+  - secret.yaml
+  - service.yaml
+  - service_account.yaml

@@ -3,8 +3,8 @@ package updater
 import (
 	"context"
 
-	"github.com/koyuta/manifest-updater/pkg/registry"
-	"github.com/koyuta/manifest-updater/pkg/repository"
+	"manifest-updater/pkg/registry"
+	"manifest-updater/pkg/repository"
 )
 
 type Entry struct {

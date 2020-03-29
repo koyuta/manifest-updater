@@ -49,15 +49,11 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr          string
-		enableLeaderElection bool
-		interval             uint
-		token                string
+		metricsAddr string
+		interval    uint
+		token       string
 	)
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
 	flag.UintVar(&interval, "interval", 60, "")
 	flag.StringVar(&token, "token", "", "")
 	flag.Parse()
@@ -68,8 +64,8 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "6d4b7448.koyuta.io",
+		LeaderElection:     true,
+		LeaderElectionID:   "manifest-updater-leader",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -96,14 +92,24 @@ func main() {
 		token,
 	)
 
+	var (
+		loopStop = make(chan struct{}, 1)
+		mgrStop  = make(chan struct{}, 1)
+	)
+	go func() {
+		<-ctrl.SetupSignalHandler()
+		loopStop <- struct{}{}
+		mgrStop <- struct{}{}
+	}()
+
 	var eg, _ = errgroup.WithContext(context.Background())
 	setupLog.Info("starting looper")
 	eg.Go(func() error {
-		return looper.Loop(ctrl.SetupSignalHandler())
+		return looper.Loop(loopStop)
 	})
 	setupLog.Info("starting manager")
 	eg.Go(func() error {
-		return mgr.Start(ctrl.SetupSignalHandler())
+		return mgr.Start(mgrStop)
 	})
 	if err := eg.Wait(); err != nil {
 		setupLog.Error(err, "problem running manager")

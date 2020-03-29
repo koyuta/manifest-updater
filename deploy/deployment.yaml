@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: manifest-updater-controller-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      labels:
+        control-plane: controller-manager
+    spec:
+      containers:
+        - name: manager
+          image: manifest-updater:latest
+          env:
+            - name: TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: manifest-updater
+                  key: token
+          args:
+            - --metrics-addr=127.0.0.1:8080
+            - --token=${TOKEN}
+      serviceAccountName: manifest-updater
+      restartPolicy: Always

@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"manifest-updater/pkg/registry"
+	"manifest-updater/pkg/repository"
+
 	"github.com/go-logr/logr"
-	"github.com/koyuta/manifest-updater/pkg/repository"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -60,7 +63,7 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 				return errors.New("Queue was closed")
 			}
 			j, _ := json.Marshal(entry)
-			u.logger.Info(string(j), "Recieved a entry")
+			u.logger.Info(fmt.Sprintf("Recieved a entry: %v", string(j)))
 			u.entries = append(u.entries, entry)
 			repoLocker[entry.Git] = &sync.Mutex{}
 		case <-stop:
@@ -96,11 +99,13 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 						j, _ := json.Marshal(entry)
 						switch {
 						case errors.Is(err, repository.ErrTagAlreadyUpToDate):
-							u.logger.Info(string(j), "Image tag already up to date")
+							u.logger.Info(fmt.Sprintf("Image tag already up to date: %s", string(j)))
+						case errors.Is(err, registry.ErrNoTagsFound):
+							u.logger.Info(fmt.Sprintf("Image tag was not updated: %s", string(j)))
 						case err != nil:
 							u.logger.Error(err, "Updater")
 						default:
-							u.logger.Info(string(j), "Pull request was created")
+							u.logger.Info(fmt.Sprintf("Pull request was created: %s", string(j)))
 						}
 					}
 				}()

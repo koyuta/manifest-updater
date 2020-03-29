@@ -2,7 +2,7 @@ package registry
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"regexp"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -24,8 +24,10 @@ func (d *DockerHubRegistry) FetchLatestTag(ctx context.Context) (string, error) 
 		return "", err
 	}
 	tags, err := remote.ListWithContext(ctx, registry)
+	fmt.Printf("tags: %v\n", tags)
+	fmt.Printf("err: %v\n", err)
 	if len(tags) == 0 {
-		return "", errors.New("No tags found")
+		return "", ErrNoTagsFound
 	}
 
 	return retrieveLatestTag(d.Filter, tags)

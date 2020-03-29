@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manifest-updater-manager-role
+rules:
+  - apiGroups:
+      - manifest-updater.koyuta.io
+    resources:
+      - updaters
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - manifest-updater.koyuta.io
+    resources:
+      - updaters/status
+    verbs:
+      - get
+      - patch
+      - update
