@@ -1,7 +1,0 @@
-apiVersion: manifest-updater.koyuta.io.koyuta.io/v1alpha1
-kind: Updater
-metadata:
-  name: updater-sample
-spec:
-  # Add fields here
-  foo: bar

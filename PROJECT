@@ -1,7 +1,0 @@
-domain: koyuta.io
-repo: manifest-updater
-resources:
-- group: manifest-updater.koyuta.io
-  kind: Updater
-  version: v1alpha1
-version: "2"
