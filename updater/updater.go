@@ -8,6 +8,8 @@ import (
 )
 
 type Entry struct {
+	ID        string
+	Deleted   bool
 	DockerHub string `json:"dockerHub"`
 	Filter    string `json:"filter,omitempty"`
 	Git       string `json:"git"`

@@ -50,7 +50,6 @@ type UpdaterReconciler struct {
 
 func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	_ = r.Log.WithValues("updater", req.NamespacedName)
 
 	u := &manifestupdaterkoyutaiov1alpha1.Updater{}
 	if err := r.Get(ctx, req.NamespacedName, u); err != nil {
@@ -61,7 +60,24 @@ func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	setDefaultValuesIfNotPresent(u)
 
+	var finalizerName = "finalizer.manifest-updater.koyuta.io"
+	if u.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !containsString(u.ObjectMeta.Finalizers, finalizerName) {
+			u.ObjectMeta.Finalizers = append(u.ObjectMeta.Finalizers, finalizerName)
+			return ctrl.Result{}, r.Update(context.Background(), u)
+		}
+	} else {
+		if !containsString(u.ObjectMeta.Finalizers, finalizerName) {
+			return ctrl.Result{}, nil
+		}
+		u.ObjectMeta.Finalizers = removeString(u.ObjectMeta.Finalizers, finalizerName)
+		if err := r.Update(context.Background(), u); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 	entry := &updater.Entry{
+		ID:        string(u.ObjectMeta.UID),
+		Deleted:   !u.ObjectMeta.DeletionTimestamp.IsZero(),
 		DockerHub: u.Spec.Registry.DockerHub,
 		Filter:    u.Spec.Registry.Filter,
 		Git:       u.Spec.Repository.Git,
@@ -83,4 +99,23 @@ func (r *UpdaterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&manifestupdaterkoyutaiov1alpha1.Updater{}).
 		Complete(r)
+}
+
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+func removeString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
 }

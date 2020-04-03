@@ -42,6 +42,23 @@ func NewUpdateLooper(queue <-chan *Entry, c time.Duration, logger logr.Logger, t
 	}
 }
 
+func (u *UpdateLooper) addEntry(entry *Entry) {
+	for _, entry := range u.entries {
+		if entry.ID == entry.ID {
+			return
+		}
+	}
+	u.entries = append(u.entries, entry)
+}
+
+func (u *UpdateLooper) deleteEntry(uid string) {
+	for i, entry := range u.entries {
+		if entry.ID == uid {
+			u.entries = append(u.entries[:i], u.entries[i+1:]...)
+		}
+	}
+}
+
 func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 	if v := u.shuttingDown.Load(); v != nil {
 		return errors.New("Looper is shutting down")
@@ -63,9 +80,18 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 				return errors.New("Queue was closed")
 			}
 			j, _ := json.Marshal(entry)
-			u.logger.Info(fmt.Sprintf("Recieved a entry: %v", string(j)))
-			u.entries = append(u.entries, entry)
-			repoLocker[entry.Git] = &sync.Mutex{}
+
+			if entry.Deleted {
+				u.deleteEntry(entry.ID)
+				if _, ok := repoLocker[entry.Git]; ok {
+					delete(repoLocker, entry.Git)
+				}
+				u.logger.Info(fmt.Sprintf("Deleted a entry: %v", string(j)))
+			} else {
+				u.addEntry(entry)
+				repoLocker[entry.Git] = &sync.Mutex{}
+				u.logger.Info(fmt.Sprintf("Added a entry: %v", string(j)))
+			}
 		case <-stop:
 			wg.Wait()
 			return nil
@@ -75,7 +101,13 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 				updater := NewUpdater(entry, u.token)
 
 				var errch = make(chan error, 1)
-				mux := repoLocker[entry.Git]
+
+				mux, ok := repoLocker[entry.Git]
+				if !ok {
+					mux = &sync.Mutex{}
+					repoLocker[entry.Git] = mux
+				}
+
 				sem.Acquire(context.Background(), 1)
 				wg.Add(1)
 				go func() {
