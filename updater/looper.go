@@ -132,8 +132,10 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 						switch {
 						case errors.Is(err, repository.ErrTagAlreadyUpToDate):
 							u.logger.Info(fmt.Sprintf("Image tag already up to date: %s", string(j)))
+						case errors.Is(err, repository.ErrTagNotReplaced):
+							u.logger.Info(fmt.Sprintf("Image tag was not replaced: %s", string(j)))
 						case errors.Is(err, registry.ErrNoTagsFound):
-							u.logger.Info(fmt.Sprintf("Image tag was not updated: %s", string(j)))
+							u.logger.Info(fmt.Sprintf("Image tag was not found: %s", string(j)))
 						case err != nil:
 							u.logger.Error(err, "Updater")
 						default:
