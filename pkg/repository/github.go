@@ -22,7 +22,8 @@ import (
 )
 
 var (
-	ErrTagNotReplaced = errors.New("tag not replaced")
+	ErrTagNotReplaced           = errors.New("tag not replaced")
+	ErrPullRequestAlreadyExists = errors.New("pull request already exists")
 )
 
 var nowFunc = time.Now
@@ -101,10 +102,7 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, tag string)
 		SingleBranch:  true,
 		ReferenceName: branch,
 	})
-	if errors.Is(err, git.NoErrAlreadyUpToDate) {
-		return ErrTagAlreadyUpToDate
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return err
 	}
 
@@ -123,7 +121,7 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, tag string)
 		return err
 	}
 
-	re := regexp.MustCompile(fmt.Sprintf(`%s: *(?P<tag>\w[\w-\.]{0,127})`, g.ImageName))
+	re := regexp.MustCompile(fmt.Sprintf(`%s:(?P<tag>\w[\w-\.]{0,127})`, g.ImageName))
 	if err = filepath.Walk(
 		filepath.Join(clonepath, g.Path),
 		func(path string, info os.FileInfo, err error) error {
@@ -204,6 +202,17 @@ func (g *GitHubRepository) CreatePullRequest(ctx context.Context) error {
 		&oauth2.Token{AccessToken: g.Token},
 	)))
 
+	prs, _, err := client.PullRequests.List(ctx, owner, repoistory, &github.PullRequestListOptions{
+		Head: fmt.Sprintf("%s:%s", owner, BranchName),
+		Base: g.Branch,
+	})
+	if err != nil {
+		return err
+	}
+	if len(prs) > 0 {
+		return ErrPullRequestAlreadyExists
+	}
+
 	_, _, err = client.PullRequests.Create(ctx, owner, repoistory, &github.NewPullRequest{
 		Title:               github.String("Automaticaly update image tags"),
 		Head:                github.String(BranchName),
@@ -215,12 +224,12 @@ func (g *GitHubRepository) CreatePullRequest(ctx context.Context) error {
 }
 
 func (g *GitHubRepository) extractOwnerFromEndpoint(endpoint *transport.Endpoint) string {
-	path := strings.Split(endpoint.Path, "/")
+	path := strings.Split(strings.TrimPrefix(endpoint.Path, "/"), "/")
 	owner := path[0]
 	return owner
 }
 
 func (g *GitHubRepository) extractRepositoryFromEndpoint(endpoint *transport.Endpoint) string {
-	path := strings.Split(endpoint.Path, "/")
+	path := strings.Split(strings.TrimPrefix(endpoint.Path, "/"), "/")
 	return strings.TrimSuffix(path[1], ".git")
 }
