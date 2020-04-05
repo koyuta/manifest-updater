@@ -51,10 +51,12 @@ func main() {
 	var (
 		metricsAddr string
 		interval    uint
+		user        string
 		token       string
 	)
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.UintVar(&interval, "interval", 60, "")
+	flag.StringVar(&user, "user", "", "")
 	flag.StringVar(&token, "token", "", "")
 	flag.Parse()
 
@@ -89,6 +91,7 @@ func main() {
 		queue,
 		time.Duration(interval)*time.Second,
 		ctrl.Log.WithName("Loop"),
+		user,
 		token,
 	)
 

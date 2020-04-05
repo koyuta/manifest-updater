@@ -18,6 +18,7 @@ import (
 	"gopkg.in/src-d/go-git.v4/plumbing"
 	"gopkg.in/src-d/go-git.v4/plumbing/object"
 	"gopkg.in/src-d/go-git.v4/plumbing/transport"
+	"gopkg.in/src-d/go-git.v4/plumbing/transport/http"
 )
 
 var (
@@ -36,19 +37,21 @@ type GitHubRepository struct {
 	Branch    string
 	Path      string
 	ImageName string
+	User      string
 	Token     string
 }
 
-func NewGitHubRepository(u, b, p, i, t string) *GitHubRepository {
-	if b == "" {
-		b = "master"
+func NewGitHubRepository(url, branch, path, imageName, user, token string) *GitHubRepository {
+	if branch == "" {
+		branch = "master"
 	}
 	return &GitHubRepository{
-		URL:       u,
-		Branch:    b,
-		Path:      p,
-		ImageName: i,
-		Token:     t,
+		URL:       url,
+		Branch:    branch,
+		Path:      path,
+		ImageName: imageName,
+		User:      user,
+		Token:     token,
 	}
 }
 
@@ -63,11 +66,17 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, tag string)
 		g.extractRepositoryFromEndpoint(endpoint),
 	)
 
+	var auth transport.AuthMethod
+	if endpoint.Protocol == "https" && g.User != "" && g.Token != "" {
+		auth = &http.BasicAuth{Username: g.User, Password: g.Token}
+	}
+
 	branch := plumbing.NewBranchReferenceName(g.Branch)
 
 	var repository *git.Repository
 	if _, err := os.Stat(clonepath); os.IsNotExist(err) {
 		opts := &git.CloneOptions{
+			Auth:          auth,
 			URL:           g.URL,
 			SingleBranch:  true,
 			ReferenceName: branch,
@@ -166,15 +175,18 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, tag string)
 		return err
 	}
 
-	err = repository.PushContext(ctx, &git.PushOptions{})
-	// Because of:
-	// https://github.com/src-d/go-git/blob/d6c4b113c17a011530e93f179b7ac27eb3f17b9b/remote.go#L784
-	// https://github.com/src-d/go-git/blob/d6c4b113c17a011530e93f179b7ac27eb3f17b9b/remote.go#L793
-	if strings.Contains(err.Error(), git.ErrNonFastForwardUpdate.Error()) {
-		return nil
-	}
-	if errors.Is(err, git.ErrNonFastForwardUpdate) {
-		return ErrTagAlreadyUpToDate
+	err = repository.PushContext(ctx, &git.PushOptions{Auth: auth})
+	if err != nil {
+		if errors.Is(err, git.ErrNonFastForwardUpdate) {
+			return ErrTagAlreadyUpToDate
+		}
+
+		// Because of:
+		// https://github.com/src-d/go-git/blob/d6c4b113c17a011530e93f179b7ac27eb3f17b9b/remote.go#L784
+		// https://github.com/src-d/go-git/blob/d6c4b113c17a011530e93f179b7ac27eb3f17b9b/remote.go#L793
+		if strings.Contains(err.Error(), git.ErrNonFastForwardUpdate.Error()) {
+			return nil
+		}
 	}
 	return err
 }

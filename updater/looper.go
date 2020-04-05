@@ -23,6 +23,7 @@ type UpdateLooper struct {
 	checkInterval time.Duration
 	logger        logr.Logger
 
+	user  string
 	token string
 
 	queue <-chan *Entry
@@ -31,11 +32,12 @@ type UpdateLooper struct {
 	shuttingDown *atomic.Value
 }
 
-func NewUpdateLooper(queue <-chan *Entry, c time.Duration, logger logr.Logger, token string) *UpdateLooper {
+func NewUpdateLooper(queue <-chan *Entry, c time.Duration, logger logr.Logger, user, token string) *UpdateLooper {
 	return &UpdateLooper{
 		queue:         queue,
 		checkInterval: c,
 		logger:        logger,
+		user:          user,
 		token:         token,
 		done:          make(chan struct{}),
 		shuttingDown:  &atomic.Value{},
@@ -98,7 +100,7 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 		case <-ticker.C:
 			for i := range u.entries {
 				entry := u.entries[i]
-				updater := NewUpdater(entry, u.token)
+				updater := NewUpdater(entry, u.user, u.token)
 
 				var errch = make(chan error, 1)
 

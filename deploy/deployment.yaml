@@ -17,14 +17,7 @@ spec:
       containers:
         - name: manager
           image: manifest-updater:latest
-          env:
-            - name: TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: manifest-updater
-                  key: token
           args:
             - --metrics-addr=127.0.0.1:8080
-            - --token=${TOKEN}
       serviceAccountName: manifest-updater
       restartPolicy: Always
