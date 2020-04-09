@@ -8,6 +8,5 @@ resources:
   - namespace.yaml
   - role.yaml
   - role_binding.yaml
-  - secret.yaml
   - service.yaml
   - service_account.yaml

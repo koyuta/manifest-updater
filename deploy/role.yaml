@@ -29,3 +29,9 @@ rules:
       - events
     verbs:
       - create
+  - apiGroups:
+      - manifest-updater.koyuta.io/v1alpha1
+    resources:
+      - updaters
+    verbs:
+      - list
