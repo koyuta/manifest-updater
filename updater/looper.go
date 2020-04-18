@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"manifest-updater/pkg/registry"
@@ -27,9 +26,6 @@ type UpdateLooper struct {
 	token string
 
 	queue <-chan *Entry
-
-	done         chan struct{}
-	shuttingDown *atomic.Value
 }
 
 func NewUpdateLooper(queue <-chan *Entry, c time.Duration, logger logr.Logger, user, token string) *UpdateLooper {
@@ -39,8 +35,6 @@ func NewUpdateLooper(queue <-chan *Entry, c time.Duration, logger logr.Logger, u
 		logger:        logger,
 		user:          user,
 		token:         token,
-		done:          make(chan struct{}),
-		shuttingDown:  &atomic.Value{},
 	}
 }
 
@@ -62,10 +56,6 @@ func (u *UpdateLooper) deleteEntry(uid string) {
 }
 
 func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
-	if v := u.shuttingDown.Load(); v != nil {
-		return errors.New("Looper is shutting down")
-	}
-
 	ticker := time.NewTicker(u.checkInterval)
 	defer ticker.Stop()
 
