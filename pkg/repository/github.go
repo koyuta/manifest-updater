@@ -21,11 +21,6 @@ import (
 	"gopkg.in/src-d/go-git.v4/plumbing/transport/http"
 )
 
-var (
-	ErrTagNotReplaced           = errors.New("tag not replaced")
-	ErrPullRequestAlreadyExists = errors.New("pull request already exists")
-)
-
 var nowFunc = time.Now
 
 var (
@@ -225,8 +220,7 @@ func (g *GitHubRepository) CreatePullRequest(ctx context.Context) error {
 
 func (g *GitHubRepository) extractOwnerFromEndpoint(endpoint *transport.Endpoint) string {
 	path := strings.Split(strings.TrimPrefix(endpoint.Path, "/"), "/")
-	owner := path[0]
-	return owner
+	return path[0]
 }
 
 func (g *GitHubRepository) extractRepositoryFromEndpoint(endpoint *transport.Endpoint) string {
