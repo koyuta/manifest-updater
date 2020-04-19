@@ -11,7 +11,9 @@ To install ManifestUpdater to your cluster.
 kubectl apply -k deploy/
 ```
 
-### CRD
+## CRD
+
+Following custom resource is create updater object that creates a PullRequest when the new tag was pushed to specified dockehub registry.
 
 ```
 apiVersion: manifest-updater.koyuta.io/v1alpha1
@@ -27,3 +29,20 @@ spec:
     branch: master
     path: /overlay/prd
 ```
+
+### Features
+
+Required:
+
+|Name|Description|
+|:--:|:---------:|
+|registry.dockerHub|The resource url of dockerhub.|
+|repository.git|Manifest repository.|
+
+Options
+
+| Name |Default|Description|
+|:----:|:-----:|:---------:|
+|filter|(Without filtering)|Extract image tags matched by filter regexp.|
+|branch|`master`|The base branch of PullRequest.|
+| path |`/`|Rewrites only the tags below that path.|
