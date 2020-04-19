@@ -60,9 +60,9 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 	defer ticker.Stop()
 
 	var (
-		wg         = sync.WaitGroup{}
-		sem        = semaphore.NewWeighted(10)
-		repoLocker = map[string]sync.Locker{}
+		wg      = sync.WaitGroup{}
+		sem     = semaphore.NewWeighted(10)
+		rlocker = repoLocker{m: sync.Map{}}
 	)
 
 	for {
@@ -75,13 +75,9 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 
 			if entry.Deleted {
 				u.deleteEntry(entry.ID)
-				if _, ok := repoLocker[entry.Git]; ok {
-					delete(repoLocker, entry.Git)
-				}
 				u.logger.Info(fmt.Sprintf("Deleted a entry: %v", string(j)))
 			} else {
 				u.addEntry(entry)
-				repoLocker[entry.Git] = &sync.Mutex{}
 				u.logger.Info(fmt.Sprintf("Added a entry: %v", string(j)))
 			}
 		case <-stop:
@@ -92,14 +88,11 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 				entry := u.entries[i]
 				updater := NewUpdater(entry, u.user, u.token)
 
+				rlocker.Store(entry.Git, &sync.Mutex{})
+
 				var errch = make(chan error, 1)
 
-				mux, ok := repoLocker[entry.Git]
-				if !ok {
-					mux = &sync.Mutex{}
-					repoLocker[entry.Git] = mux
-				}
-
+				mux := rlocker.Load(entry.Git)
 				sem.Acquire(context.Background(), 1)
 				wg.Add(1)
 				go func() {
