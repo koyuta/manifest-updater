@@ -29,29 +29,33 @@ var (
 )
 
 type GitHubRepository struct {
-	URL       string
-	Branch    string
-	Path      string
-	ImageName string
-	User      string
-	Token     string
+	URL    string     `json:"url"`
+	Branch string     `json:"branch"`
+	Path   string     `json:"path,omitempty"`
+	Auth   GithubAuth `json:"-"`
 }
 
-func NewGitHubRepository(url, branch, path, imageName, user, token string) *GitHubRepository {
+type GithubAuth struct {
+	User  string
+	Token string
+}
+
+func NewGitHubRepository(url, branch, path string, auth GithubAuth) *GitHubRepository {
 	if branch == "" {
 		branch = "master"
 	}
+	if path == "" {
+		path = "/"
+	}
 	return &GitHubRepository{
-		URL:       url,
-		Branch:    branch,
-		Path:      path,
-		ImageName: imageName,
-		User:      user,
-		Token:     token,
+		URL:    url,
+		Branch: branch,
+		Path:   path,
+		Auth:   auth,
 	}
 }
 
-func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, tag string) error {
+func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, image, tag string) error {
 	endpoint, err := transport.NewEndpoint(g.URL)
 	if err != nil {
 		return err
@@ -63,8 +67,8 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, tag string)
 	)
 
 	var auth transport.AuthMethod
-	if endpoint.Protocol == "https" && g.User != "" && g.Token != "" {
-		auth = &http.BasicAuth{Username: g.User, Password: g.Token}
+	if endpoint.Protocol == "https" && g.Auth.User != "" && g.Auth.Token != "" {
+		auth = &http.BasicAuth{Username: g.Auth.User, Password: g.Auth.Token}
 	}
 
 	branch := plumbing.NewBranchReferenceName(g.Branch)
@@ -116,7 +120,7 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, tag string)
 		return err
 	}
 
-	re := regexp.MustCompile(fmt.Sprintf(`%s:(?P<tag>\w[\w-\.]{0,127})`, g.ImageName))
+	re := regexp.MustCompile(fmt.Sprintf(`%s:(?P<tag>\w[\w-\.]{0,127})`, image))
 	if err = filepath.Walk(
 		filepath.Join(clonepath, g.Path),
 		func(path string, info os.FileInfo, err error) error {
@@ -131,7 +135,7 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, tag string)
 			if err != nil {
 				return err
 			}
-			replacedContent := re.ReplaceAll(content, []byte(fmt.Sprintf("%s:%s", g.ImageName, tag)))
+			replacedContent := re.ReplaceAll(content, []byte(fmt.Sprintf("%s:%s", image, tag)))
 			if err := ioutil.WriteFile(path, replacedContent, 0); err != nil {
 				return err
 			}
@@ -194,7 +198,7 @@ func (g *GitHubRepository) CreatePullRequest(ctx context.Context) error {
 	repoistory := g.extractRepositoryFromEndpoint(endpoint)
 
 	client := github.NewClient(oauth2.NewClient(ctx, oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: g.Token},
+		&oauth2.Token{AccessToken: g.Auth.Token},
 	)))
 
 	prs, _, err := client.PullRequests.List(ctx, owner, repoistory, &github.PullRequestListOptions{

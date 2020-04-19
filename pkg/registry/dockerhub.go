@@ -9,8 +9,8 @@ import (
 )
 
 type DockerHubRegistry struct {
-	URL    string
-	Filter string
+	URL    string `json:"url"`
+	Filter string `json:"fileter,omitempty"`
 }
 
 func NewDockerHubRegistry(u, f string) *DockerHubRegistry {

@@ -7,19 +7,11 @@ import (
 	"manifest-updater/pkg/repository"
 )
 
-type Entry struct {
-	ID        string `json:"-"`
-	Deleted   bool   `json:"-"`
-	DockerHub string `json:"dockerHub"`
-	Filter    string `json:"filter,omitempty"`
-	Git       string `json:"git"`
-	Branch    string `json:"branch,omitempty"`
-	Path      string `json:"path,omitempty"`
-}
-
 type Updater struct {
-	Registry   registry.Registry
-	Repository repository.Repository
+	RepositoryName string                `json:"-"`
+	ImageName      string                `json:"-"`
+	Registry       registry.Registry     `json:"registry"`
+	Repository     repository.Repository `json:"repository"`
 }
 
 func NewUpdater(entry *Entry, user, token string) *Updater {
@@ -32,9 +24,10 @@ func NewUpdater(entry *Entry, user, token string) *Updater {
 			entry.Git,
 			entry.Branch,
 			entry.Path,
-			entry.DockerHub,
-			user,
-			token,
+			repository.GithubAuth{
+				User:  user,
+				Token: token,
+			},
 		),
 	}
 }
@@ -44,7 +37,7 @@ func (u *Updater) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := u.Repository.PushReplaceTagCommit(ctx, tag); err != nil {
+	if err := u.Repository.PushReplaceTagCommit(ctx, u.ImageName, tag); err != nil {
 		return err
 	}
 	return u.Repository.CreatePullRequest(ctx)

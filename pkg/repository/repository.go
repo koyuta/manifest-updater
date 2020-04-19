@@ -12,6 +12,6 @@ var (
 )
 
 type Repository interface {
-	PushReplaceTagCommit(context.Context, string) error
-	CreatePullRequest(context.Context) error
+	PushReplaceTagCommit(ctx context.Context, image, tag string) error
+	CreatePullRequest(ctx context.Context) error
 }

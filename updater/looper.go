@@ -18,7 +18,7 @@ import (
 var timeout = 20 * time.Second
 
 type UpdateLooper struct {
-	entries       []*Entry
+	updaters      map[string]*Updater
 	checkInterval time.Duration
 	logger        logr.Logger
 
@@ -30,29 +30,23 @@ type UpdateLooper struct {
 
 func NewUpdateLooper(queue <-chan *Entry, c time.Duration, logger logr.Logger, user, token string) *UpdateLooper {
 	return &UpdateLooper{
-		queue:         queue,
+		updaters:      map[string]*Updater{},
 		checkInterval: c,
 		logger:        logger,
 		user:          user,
 		token:         token,
+		queue:         queue,
 	}
 }
 
-func (u *UpdateLooper) addEntry(entry *Entry) {
-	for _, entry := range u.entries {
-		if entry.ID == entry.ID {
-			return
-		}
-	}
-	u.entries = append(u.entries, entry)
-}
-
-func (u *UpdateLooper) deleteEntry(uid string) {
-	for i, entry := range u.entries {
-		if entry.ID == uid {
-			u.entries = append(u.entries[:i], u.entries[i+1:]...)
-		}
-	}
+type Entry struct {
+	ID        string `json:"-"`
+	Deleted   bool   `json:"-"`
+	DockerHub string `json:"dockerHub"`
+	Filter    string `json:"filter,omitempty"`
+	Git       string `json:"git"`
+	Branch    string `json:"branch,omitempty"`
+	Path      string `json:"path,omitempty"`
 }
 
 func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
@@ -74,25 +68,24 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 			j, _ := json.Marshal(entry)
 
 			if entry.Deleted {
-				u.deleteEntry(entry.ID)
+				delete(u.updaters, entry.ID)
 				u.logger.Info(fmt.Sprintf("Deleted a entry: %v", string(j)))
 			} else {
-				u.addEntry(entry)
+				u.updaters[entry.ID] = NewUpdater(entry, u.user, u.token)
 				u.logger.Info(fmt.Sprintf("Added a entry: %v", string(j)))
 			}
 		case <-stop:
 			wg.Wait()
 			return nil
 		case <-ticker.C:
-			for i := range u.entries {
-				entry := u.entries[i]
-				updater := NewUpdater(entry, u.user, u.token)
+			for id := range u.updaters {
+				updater := u.updaters[id]
 
-				rlocker.Store(entry.Git, &sync.Mutex{})
+				rlocker.Store(updater.RepositoryName, &sync.Mutex{})
 
 				var errch = make(chan error, 1)
 
-				mux := rlocker.Load(entry.Git)
+				mux := rlocker.Load(updater.RepositoryName)
 				sem.Acquire(context.Background(), 1)
 				wg.Add(1)
 				go func() {
@@ -113,7 +106,7 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 					case <-ctx.Done():
 						u.logger.Error(ctx.Err(), "Updater")
 					case err := <-errch:
-						j, _ := json.Marshal(entry)
+						j, _ := json.Marshal(updater)
 						switch {
 						case errors.Is(err, repository.ErrTagAlreadyUpToDate):
 							u.logger.Info(fmt.Sprintf("Image tag already up to date: %s", string(j)))
