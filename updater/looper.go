@@ -81,11 +81,11 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 			for id := range u.updaters {
 				updater := u.updaters[id]
 
-				rlocker.Store(updater.RepositoryName, &sync.Mutex{})
-
-				var errch = make(chan error, 1)
-
 				mux := rlocker.Load(updater.RepositoryName)
+				if mux == nil {
+					rlocker.Store(updater.RepositoryName, &sync.Mutex{})
+				}
+
 				sem.Acquire(context.Background(), 1)
 				wg.Add(1)
 				go func() {
@@ -100,7 +100,10 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 					ctx, cancel := context.WithTimeout(context.Background(), timeout)
 					defer cancel()
 
-					errch <- updater.Run(ctx)
+					errch := make(chan error, 1)
+					go func() {
+						errch <- updater.Run(ctx)
+					}()
 
 					select {
 					case <-ctx.Done():
