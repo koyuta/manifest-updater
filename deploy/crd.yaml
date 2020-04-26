@@ -41,7 +41,9 @@ spec:
               type: object
             repository:
               properties:
-                branch:
+                base:
+                  type: string
+                head:
                   type: string
                 git:
                   type: string

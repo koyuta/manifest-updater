@@ -35,9 +35,10 @@ type Registry struct {
 }
 
 type Repository struct {
-	Git    string `json:"git,omitempty"`
-	Branch string `json:"branch,omitempty"`
-	Path   string `json:"path,omitempty"`
+	Git  string `json:"git,omitempty"`
+	Base string `json:"base,omitempty"`
+	Head string `json:"head,omitempty"`
+	Path string `json:"path,omitempty"`
 }
 
 // UpdaterStatus defines the observed state of Updater

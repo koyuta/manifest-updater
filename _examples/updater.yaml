@@ -5,8 +5,9 @@ metadata:
 spec:
   registry:
     dockerHub: index.docker.io/example/app
-    filter: dev-*
+    filter: dev-.*
   repository:
     git: git@github.com:koyuta/manifests
-    branch: master
+    base: master
+    head: feature/update-tag
     path: /overlay/prd

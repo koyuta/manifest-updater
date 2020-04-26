@@ -24,15 +24,16 @@ import (
 var nowFunc = time.Now
 
 var (
-	BranchName      = "feature/update-tag"
+	DefaultHead     = "feature/update-tag"
 	DefaultCloneDir = "/tmp"
 )
 
 type GitHubRepository struct {
-	URL    string     `json:"url"`
-	Branch string     `json:"branch"`
-	Path   string     `json:"path,omitempty"`
-	Auth   GithubAuth `json:"-"`
+	URL  string     `json:"url"`
+	Base string     `json:"base"`
+	Head string     `json:"head"`
+	Path string     `json:"path,omitempty"`
+	Auth GithubAuth `json:"-"`
 }
 
 type GithubAuth struct {
@@ -40,18 +41,22 @@ type GithubAuth struct {
 	Token string
 }
 
-func NewGitHubRepository(url, branch, path string, auth GithubAuth) *GitHubRepository {
-	if branch == "" {
-		branch = "master"
+func NewGitHubRepository(url, base, head, path string, auth GithubAuth) *GitHubRepository {
+	if base == "" {
+		base = "master"
+	}
+	if head == "" {
+		head = DefaultHead
 	}
 	if path == "" {
 		path = "/"
 	}
 	return &GitHubRepository{
-		URL:    url,
-		Branch: branch,
-		Path:   path,
-		Auth:   auth,
+		URL:  url,
+		Base: base,
+		Head: head,
+		Path: path,
+		Auth: auth,
 	}
 }
 
@@ -71,7 +76,7 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, image, tag 
 		auth = &http.BasicAuth{Username: g.Auth.User, Password: g.Auth.Token}
 	}
 
-	branch := plumbing.NewBranchReferenceName(g.Branch)
+	branch := plumbing.NewBranchReferenceName(g.Base)
 
 	var repository *git.Repository
 	if _, err := os.Stat(clonepath); os.IsNotExist(err) {
@@ -107,13 +112,13 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, image, tag 
 
 	defer func() {
 		worktree.Checkout(&git.CheckoutOptions{Branch: plumbing.Master})
-		repository.Storer.RemoveReference(plumbing.NewBranchReferenceName(BranchName))
+		repository.Storer.RemoveReference(plumbing.NewBranchReferenceName(g.Head))
 	}()
 
 	checkoutOpts := &git.CheckoutOptions{
-		Branch: plumbing.NewBranchReferenceName(BranchName),
+		Branch: plumbing.NewBranchReferenceName(g.Head),
 	}
-	if _, err = repository.Branch(BranchName); errors.Is(err, git.ErrBranchNotFound) {
+	if _, err = repository.Branch(g.Head); errors.Is(err, git.ErrBranchNotFound) {
 		checkoutOpts.Create = true
 	}
 	if err := worktree.Checkout(checkoutOpts); err != nil {
@@ -202,8 +207,8 @@ func (g *GitHubRepository) CreatePullRequest(ctx context.Context) error {
 	)))
 
 	prs, _, err := client.PullRequests.List(ctx, owner, repoistory, &github.PullRequestListOptions{
-		Head: fmt.Sprintf("%s:%s", owner, BranchName),
-		Base: g.Branch,
+		Head: fmt.Sprintf("%s:%s", owner, g.Head),
+		Base: g.Base,
 	})
 	if err != nil {
 		return err
@@ -214,8 +219,8 @@ func (g *GitHubRepository) CreatePullRequest(ctx context.Context) error {
 
 	_, _, err = client.PullRequests.Create(ctx, owner, repoistory, &github.NewPullRequest{
 		Title:               github.String("Automaticaly update image tags"),
-		Head:                github.String(BranchName),
-		Base:                github.String(g.Branch),
+		Head:                github.String(g.Head),
+		Base:                github.String(g.Base),
 		Body:                github.String(""),
 		MaintainerCanModify: github.Bool(true),
 	})

@@ -58,8 +58,6 @@ func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 	}
 
-	setDefaultValuesIfNotPresent(u)
-
 	var finalizerName = "finalizer.manifest-updater.koyuta.io"
 	if u.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !containsString(u.ObjectMeta.Finalizers, finalizerName) {
@@ -81,18 +79,13 @@ func (r *UpdaterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		DockerHub: u.Spec.Registry.DockerHub,
 		Filter:    u.Spec.Registry.Filter,
 		Git:       u.Spec.Repository.Git,
-		Branch:    u.Spec.Repository.Branch,
+		Base:      u.Spec.Repository.Base,
+		Head:      u.Spec.Repository.Head,
 		Path:      u.Spec.Repository.Path,
 	}
 	r.Queue <- entry
 
 	return ctrl.Result{}, nil
-}
-
-func setDefaultValuesIfNotPresent(updater *manifestupdaterkoyutaiov1alpha1.Updater) {
-	if updater.Spec.Repository.Branch == "" {
-		updater.Spec.Repository.Branch = defaultBranch
-	}
 }
 
 func (r *UpdaterReconciler) SetupWithManager(mgr ctrl.Manager) error {

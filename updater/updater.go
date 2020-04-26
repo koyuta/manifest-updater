@@ -22,7 +22,8 @@ func NewUpdater(entry *Entry, user, token string) *Updater {
 		),
 		Repository: repository.NewGitHubRepository(
 			entry.Git,
-			entry.Branch,
+			entry.Base,
+			entry.Head,
 			entry.Path,
 			repository.GithubAuth{
 				User:  user,
