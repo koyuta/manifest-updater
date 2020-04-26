@@ -84,7 +84,8 @@ func (u *UpdateLooper) Loop(stop <-chan struct{}) error {
 
 				mux := rlocker.Load(updater.RepositoryName)
 				if mux == nil {
-					rlocker.Store(updater.RepositoryName, &sync.Mutex{})
+					mux = &sync.Mutex{}
+					rlocker.Store(updater.RepositoryName, mux)
 				}
 
 				sem.Acquire(context.Background(), 1)
