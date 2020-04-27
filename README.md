@@ -25,7 +25,7 @@ spec:
     dockerHub: index.docker.io/example/app
     filter: dev-*
   repository:
-    git: git@github.com:koyuta/manifests
+    git: https://github.com/koyuta/manifests
     branch: master
     path: /overlay/prd
 ```
@@ -36,9 +36,11 @@ Here is a spec field of `Updater`:
 |-------|-----|-------------|
 |registry|dockerHub|The resource url of dockerhub.|
 |registry|filter|Extract image tags matched by filter regexp. (Optional)|
-|repository|git|The manifest repository.|
-|repository|branch|The base branch of PullRequest. (Optional, default: `master`)|
+|repository|git|The manifest repository url. Preferable to use https protocol.|
+|repository|base|The base branch of PullRequest. (Optional, default: `master`)|
+|repository|head|The head branch of PullRequest. (Optional, default: `feature/update-tag`)|
 |repository|path|Rewrites only the tags below that path. (Optional, default: `/`)|
+
 
 ## Provide a github token
 

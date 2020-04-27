@@ -16,7 +16,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport"
-	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/go-github/github"
 	"golang.org/x/oauth2"
 )
@@ -71,9 +70,8 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, image, tag 
 		g.extractRepositoryFromEndpoint(endpoint),
 	)
 
-	var auth transport.AuthMethod
-	if endpoint.Protocol == "https" && g.Auth.User != "" && g.Auth.Token != "" {
-		auth = &http.BasicAuth{Username: g.Auth.User, Password: g.Auth.Token}
+	if endpoint.Protocol == "https" && g.Auth.Token != "" {
+		endpoint.Host = fmt.Sprintf("%s@%s", g.Auth.Token, endpoint.Host)
 	}
 
 	branch := plumbing.NewBranchReferenceName(g.Base)
@@ -81,8 +79,7 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, image, tag 
 	var repository *git.Repository
 	if _, err := os.Stat(clonepath); os.IsNotExist(err) {
 		opts := &git.CloneOptions{
-			Auth:          auth,
-			URL:           g.URL,
+			URL:           endpoint.String(),
 			SingleBranch:  true,
 			ReferenceName: branch,
 		}
@@ -177,7 +174,7 @@ func (g *GitHubRepository) PushReplaceTagCommit(ctx context.Context, image, tag 
 		return err
 	}
 
-	err = repository.PushContext(ctx, &git.PushOptions{Auth: auth})
+	err = repository.PushContext(ctx, &git.PushOptions{})
 	if err != nil {
 		if errors.Is(err, git.ErrNonFastForwardUpdate) {
 			return ErrTagAlreadyUpToDate
